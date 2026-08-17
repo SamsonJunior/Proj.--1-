@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tailor Profile — EDC Tailoring Showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Cormorant+Garamond:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="page">
+  <div id="nav-mount"></div>
+  <main class="main">
+    <div class="container">
+      <div id="profile-mount"></div>
+
+      <div class="section-head" style="margin-top:40px;">
+        <h2 class="mt-0">Portfolio</h2>
+      </div>
+      <div id="design-grid" class="design-grid"></div>
+
+      <div id="contact-mount" style="margin-top:48px;"></div>
+    </div>
+  </main>
+  <footer class="footer"><div class="container">Web-Based Tailoring Showcase &amp; Client-Linkage System — NSUK EDC</div></footer>
+</div>
+<script src="/js/common.js"></script>
+<script>
+const tailorId = new URLSearchParams(window.location.search).get('id');
+
+async function load() {
+  const me = await renderNav();
+  if (!tailorId) { document.getElementById('profile-mount').innerHTML = '<p>No tailor specified.</p>'; return; }
+
+  const { tailor, designs } = await api.get(`/api/tailors/${tailorId}`);
+
+  document.getElementById('profile-mount').innerHTML = `
+    <span class="eyebrow">Tailor profile</span>
+    <h1>${escapeHtml(tailor.full_name)}</h1>
+    <span class="tailor-specialty">${escapeHtml(tailor.specialty || 'General tailoring')}</span>
+    <p style="max-width:60ch;margin-top:10px;">${escapeHtml(tailor.bio || 'This tailor has not added a bio yet.')}</p>
+    ${renderSkillTags(tailor.skills)}
+    <p style="font-size:0.88rem;color:var(--ink-soft);">${escapeHtml(tailor.location || '')} ${tailor.phone ? '· ' + escapeHtml(tailor.phone) : ''}</p>
+  `;
+
+  const grid = document.getElementById('design-grid');
+  grid.innerHTML = designs.length ? designs.map(d => `
+    <div class="design-card">
+      <img class="design-card-img" src="${d.image_path}" alt="${escapeHtml(d.title)}">
+      <div class="design-card-body">
+        <h3>${escapeHtml(d.title)}</h3>
+        <p style="font-size:0.85rem;margin-bottom:8px;">${escapeHtml(d.description || '')}</p>
+        <div class="design-card-meta">
+          <span>${escapeHtml(d.category || 'General')}</span>
+          <span>${d.price ? '₦' + escapeHtml(d.price) : ''}</span>
+        </div>
+      </div>
+    </div>
+  `).join('') : `<div class="empty-state" style="grid-column:1/-1"><h3>No designs uploaded yet</h3></div>`;
+
+  const contactMount = document.getElementById('contact-mount');
+  if (me && me.role === 'client' && me.id !== tailor.id) {
+    contactMount.innerHTML = `
+      <div class="stitched-card">
+        <h3>Contact ${escapeHtml(tailor.full_name)}</h3>
+        <div id="contact-alert"></div>
+        <form id="contact-form">
+          <div class="field">
+            <label for="msg">Message</label>
+            <textarea id="msg" required placeholder="Tell them what you're looking for..."></textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">Send message</button>
+        </form>
+      </div>
+    `;
+    document.getElementById('contact-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const alertMount = document.getElementById('contact-alert');
+      try {
+        await api.send('POST', '/api/messages', { tailor_id: tailor.id, body: document.getElementById('msg').value });
+        alertMount.innerHTML = `<div class="alert alert-success">Message sent — check your inbox for replies.</div>`;
+        e.target.reset();
+      } catch (err) {
+        alertMount.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+      }
+    });
+  } else if (!me) {
+    contactMount.innerHTML = `<div class="stitched-card"><p class="mt-0">Log in as a client to contact this tailor.</p><a href="/login.html" class="btn btn-outline">Log in</a></div>`;
+  }
+}
+load();
+</script>
+</body>
+</html>

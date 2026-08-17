@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Browse Tailors — EDC Tailoring Showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Cormorant+Garamond:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="page">
+  <div id="nav-mount"></div>
+  <main class="main">
+    <div class="container">
+      <div class="showcase-header">
+        <div>
+          <span class="eyebrow">Artisan Directory</span>
+          <h2 class="mt-0">Meet Our <em>Featured</em> Tailors</h2>
+        </div>
+        <div class="filter-tabs" id="filter-tabs">
+          <button class="filter-tab active" data-filter="all">All</button>
+          <button class="filter-tab" data-filter="traditional">Traditional</button>
+          <button class="filter-tab" data-filter="corporate">Corporate</button>
+          <button class="filter-tab" data-filter="bridal">Bridal</button>
+        </div>
+      </div>
+      <div id="tailor-grid" class="tailors-grid"></div>
+    </div>
+  </main>
+  <footer class="footer"><div class="container">Web-Based Tailoring Showcase &amp; Client-Linkage System — NSUK EDC</div></footer>
+</div>
+<script src="/js/common.js"></script>
+<script>
+// Maps a tailor's specialty text to the short badge word used on the
+// card banner, and to the filter-tab category (or categories) it
+// belongs to. Kept in one place so the badge and the filter always agree.
+function specialtyMeta(specialty) {
+  const s = (specialty || '').toLowerCase();
+  if (s.includes('corporate')) return { badge: 'Corporate', categories: ['corporate'] };
+  if (s.includes('bridal')) return { badge: 'Bridal', categories: ['traditional', 'bridal'] };
+  if (s.includes('heritage') || s.includes('adire')) return { badge: 'Traditional', categories: ['traditional'] };
+  return { badge: 'Traditional', categories: ['traditional'] };
+}
+
+function initials(fullName) {
+  return fullName.split(' ').filter(Boolean).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+async function load() {
+  await renderNav();
+  const [{ tailors }, { designs }] = await Promise.all([
+    api.get('/api/tailors'),
+    api.get('/api/designs'),
+  ]);
+
+  const grid = document.getElementById('tailor-grid');
+  if (tailors.length === 0) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><h3>No tailors registered yet</h3></div>`;
+    return;
+  }
+
+  grid.innerHTML = tailors.map(t => {
+    const meta = specialtyMeta(t.specialty);
+    const firstDesign = designs.find(d => d.tailor_id === t.id);
+    const bgImage = firstDesign ? firstDesign.image_path : '';
+    return `
+    <a href="/tailor-profile.html?id=${t.id}" class="tailor-card" data-category="${meta.categories.join(' ')}">
+      <div class="tailor-visual">
+        ${bgImage ? `<img class="tailor-bg" src="${bgImage}" alt="">` : `<div class="tailor-bg tailor-bg-placeholder"></div>`}
+        <div class="tailor-specialty-badge">${meta.badge}</div>
+        <div class="tailor-avatar">${initials(t.full_name)}</div>
+        <div class="tailor-overlay"><span class="tailor-overlay-text">View Full Profile →</span></div>
+      </div>
+      <div class="tailor-info">
+        <h3 class="tailor-name">${escapeHtml(t.full_name)}</h3>
+        <div class="tailor-title">EDC Certified — ${escapeHtml(t.specialty || 'Tailor')}</div>
+        <p class="tailor-desc">${escapeHtml(t.bio || 'No bio yet.')}</p>
+        ${renderSkillTags(t.skills)}
+        <div class="tailor-footer">
+          <span class="tailor-location">${escapeHtml(t.location || '')}</span>
+          <span class="tailor-contact-btn">Contact</span>
+        </div>
+      </div>
+    </a>
+  `;
+  }).join('');
+
+  document.querySelectorAll('.filter-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const filter = btn.dataset.filter;
+      document.querySelectorAll('.tailor-card').forEach(card => {
+        const cats = card.dataset.category.split(' ');
+        card.style.display = (filter === 'all' || cats.includes(filter)) ? '' : 'none';
+      });
+    });
+  });
+}
+load();
+</script>
+</body>
+</html>

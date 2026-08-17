@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDC Tailoring Showcase — NSUK</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Cormorant+Garamond:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="page">
+  <div id="nav-mount"></div>
+
+  <main class="main">
+    <section class="hero">
+      <div class="hero-left">
+        <div class="hero-university-logo">
+          <div class="hero-mark-wrap">
+            <img src="/img/nsuk-logo.png" alt="Nasarawa State University Logo" class="hero-mark-img">
+          </div>
+          <div class="hero-uni-info">
+            <span class="hero-uni-name">Nasarawa State University, Keffi</span>
+            <span class="hero-uni-sub">Entrepreneurship Development Centre</span>
+          </div>
+        </div>
+        <div class="hero-badge">
+          <div class="hero-badge-line"></div>
+          <span>NSUK Entrepreneurship Development Centre</span>
+        </div>
+        <h1>A Web-Based Tailoring Showcase and Client-Linkage System</h1>
+        <p class="hero-lede">This platform enables registered tailors to display their portfolios and allows clients to discover, contact, and commission tailors directly — without intermediaries.</p>
+        <div class="hero-actions">
+          <a href="/register.html" class="btn btn-primary">Create an account</a>
+          <a href="/tailors.html" class="btn btn-outline">Browse tailors</a>
+        </div>
+        <div class="hero-stats-bar">
+          <div class="hero-stat"><span class="num" id="stat-tailors">—</span><span class="label">Registered Tailors</span></div>
+          <div class="hero-stat"><span class="num" id="stat-designs">—</span><span class="label">Designs in Showcase</span></div>
+          <div class="hero-stat"><span class="num" id="stat-categories">—</span><span class="label">Categories</span></div>
+        </div>
+      </div>
+      <div class="hero-right">
+        <div class="platform-card">
+          <div class="platform-card-header">
+            <div class="platform-card-dot"></div>
+            <h3>Latest From The Showcase</h3>
+          </div>
+          <div class="platform-card-body">
+            <div class="mini-campaigns" id="hero-preview">
+              <div class="mini-campaign"><div class="mini-camp-info"><h4>Loading…</h4></div></div>
+            </div>
+          </div>
+          <div class="platform-card-footer">
+            <span>NSUK EDC Tailoring Showcase &amp; Client Linkage</span>
+            <span class="platform-badge">✓ Verified Platform</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section container">
+      <div class="section-head">
+        <h2>Latest from the showcase</h2>
+        <a href="/tailors.html">View all tailors →</a>
+      </div>
+      <div id="design-grid" class="design-grid"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="container">Web-Based Tailoring Showcase &amp; Client-Linkage System — NSUK EDC Final Year Project</div>
+  </footer>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+async function load() {
+  await renderNav();
+  const { designs } = await api.get('/api/designs');
+  const { tailors } = await api.get('/api/tailors');
+
+  document.getElementById('stat-tailors').textContent = tailors.length;
+  document.getElementById('stat-designs').textContent = designs.length;
+  document.getElementById('stat-categories').textContent =
+    new Set(designs.map(d => d.category).filter(Boolean)).size;
+
+  const heroPreview = document.getElementById('hero-preview');
+  if (designs.length === 0) {
+    heroPreview.innerHTML = `<div class="mini-campaign"><div class="mini-camp-info"><h4>No designs yet</h4><span class="cat">Be the first to upload</span></div></div>`;
+  } else {
+    heroPreview.innerHTML = designs.slice(0, 4).map(d => `
+      <div class="mini-campaign">
+        <div class="mini-camp-info">
+          <h4>${escapeHtml(d.title)}</h4>
+          <span class="cat">${escapeHtml(d.category || 'General')} · ${escapeHtml(d.tailor_name)}</span>
+        </div>
+        <div class="mini-camp-amount">${d.price ? '₦' + escapeHtml(d.price) : ''}</div>
+      </div>
+    `).join('');
+  }
+
+  const grid = document.getElementById('design-grid');
+  if (designs.length === 0) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1">
+      <h3>No designs yet</h3><p>Be the first tailor to upload a piece.</p>
+    </div>`;
+    return;
+  }
+  grid.innerHTML = designs.slice(0, 8).map(d => `
+    <a href="/tailor-profile.html?id=${d.tailor_id}" class="design-card" style="text-decoration:none;">
+      <img class="design-card-img" src="${d.image_path}" alt="${escapeHtml(d.title)}">
+      <div class="design-card-body">
+        <h3>${escapeHtml(d.title)}</h3>
+        <div class="design-card-tailor">by ${escapeHtml(d.tailor_name)}</div>
+        <div class="design-card-meta">
+          <span>${escapeHtml(d.category || 'General')}</span>
+          <span>${d.price ? '₦' + escapeHtml(d.price) : ''}</span>
+        </div>
+      </div>
+    </a>
+  `).join('');
+}
+load();
+</script>
+</body>
+</html>

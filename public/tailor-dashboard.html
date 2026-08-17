@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tailor Dashboard — EDC Tailoring Showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Cormorant+Garamond:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="page">
+  <div id="nav-mount"></div>
+  <main class="main">
+    <div class="container">
+      <div class="dash-head">
+        <div>
+          <span class="eyebrow">Tailor dashboard</span>
+          <h2 class="mt-0" id="welcome-heading">Welcome</h2>
+          <p class="muted" id="welcome-email" style="margin-top:-8px;font-size:0.9em;"></p>
+        </div>
+      </div>
+
+      <div class="dash-tabs">
+        <button class="dash-tab active" data-tab="portfolio">Portfolio</button>
+        <button class="dash-tab" data-tab="upload">Upload design</button>
+        <button class="dash-tab" data-tab="profile">Profile</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-portfolio">
+        <div id="my-design-grid" class="design-grid"></div>
+      </div>
+
+      <div class="tab-panel" id="tab-upload">
+        <div class="stitched-card" style="max-width:520px;">
+          <h3 class="mt-0">Upload a new design</h3>
+          <div id="upload-alert"></div>
+          <form id="upload-form">
+            <div class="field"><label for="title">Title</label><input id="title" name="title" required></div>
+            <div class="field"><label for="category">Category</label><input id="category" name="category" placeholder="e.g. Native wear, Suits, Gowns"></div>
+            <div class="field"><label for="price">Price (₦)</label><input id="price" name="price" type="text" placeholder="e.g. 25000"></div>
+            <div class="field"><label for="description">Description</label><textarea id="description" name="description"></textarea></div>
+            <div class="field"><label for="image">Design image</label><input id="image" name="image" type="file" accept="image/*" required></div>
+            <button type="submit" class="btn btn-primary btn-block">Upload design</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-profile">
+        <div class="stitched-card" style="max-width:520px;">
+          <h3 class="mt-0">Edit your profile</h3>
+          <div id="profile-alert"></div>
+          <form id="profile-form">
+            <div class="field"><label for="specialty">Specialty</label><input id="specialty" name="specialty" placeholder="e.g. Bridal wear, Agbada, Corporate wear"></div>
+            <div class="field"><label for="skills">Skills</label><input id="skills" name="skills" placeholder="e.g. Aso-Oke, Ankara Fusion, Embroidery (comma-separated)"></div>
+            <div class="field"><label for="bio">Bio</label><textarea id="bio" name="bio" placeholder="Tell clients about your craft..."></textarea></div>
+            <div class="field"><label for="phone">Phone</label><input id="phone" name="phone"></div>
+            <div class="field"><label for="location">Location</label><input id="location" name="location" placeholder="e.g. Lafia, Nasarawa State"></div>
+            <button type="submit" class="btn btn-primary btn-block">Save profile</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+  <footer class="footer"><div class="container">Web-Based Tailoring Showcase &amp; Client-Linkage System — NSUK EDC</div></footer>
+</div>
+<script src="/js/common.js"></script>
+<script>
+let currentUser = null;
+
+document.querySelectorAll('.dash-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.dash-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+async function loadPortfolio() {
+  const { designs } = await api.get('/api/designs?tailor_id=' + currentUser.id);
+  const grid = document.getElementById('my-design-grid');
+  grid.innerHTML = designs.length ? designs.map(d => `
+    <div class="design-card" id="design-${d.id}">
+      <img class="design-card-img" src="${d.image_path}" alt="${escapeHtml(d.title)}">
+      <div class="design-card-body">
+        <h3>${escapeHtml(d.title)}</h3>
+        <div class="design-card-meta">
+          <span>${escapeHtml(d.category || 'General')}</span>
+          <span>${d.price ? '₦' + escapeHtml(d.price) : ''}</span>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="btn btn-outline btn-sm" style="flex:1" data-edit="${d.id}">Edit</button>
+          <button class="btn btn-danger btn-sm" style="flex:1" data-id="${d.id}">Remove</button>
+        </div>
+        <div class="edit-form-mount" id="edit-mount-${d.id}"></div>
+      </div>
+    </div>
+  `).join('') : `<div class="empty-state" style="grid-column:1/-1"><h3>No designs yet</h3><p>Upload your first piece from the "Upload design" tab.</p></div>`;
+
+  grid.querySelectorAll('button[data-id]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('Remove this design?')) return;
+      await fetch('/api/designs/' + btn.dataset.id, { method: 'DELETE', credentials: 'same-origin' });
+      loadPortfolio();
+    });
+  });
+
+  grid.querySelectorAll('button[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.edit;
+      const design = designs.find(d => String(d.id) === String(id));
+      const mount = document.getElementById('edit-mount-' + id);
+      if (mount.innerHTML) { mount.innerHTML = ''; return; } // toggle closed if already open
+      mount.innerHTML = `
+        <form class="edit-design-form" data-id="${id}" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px;">
+          <div class="field"><label>Title</label><input name="title" value="${escapeHtml(design.title)}" required></div>
+          <div class="field"><label>Category</label><input name="category" value="${escapeHtml(design.category || '')}"></div>
+          <div class="field"><label>Price (₦)</label><input name="price" value="${escapeHtml(design.price || '')}"></div>
+          <div class="field"><label>Description</label><textarea name="description">${escapeHtml(design.description || '')}</textarea></div>
+          <div class="field"><label>Replace image (optional)</label><input name="image" type="file" accept="image/*"></div>
+          <div id="edit-alert-${id}"></div>
+          <div style="display:flex;gap:8px;">
+            <button type="submit" class="btn btn-primary btn-sm" style="flex:1">Save changes</button>
+            <button type="button" class="btn btn-outline btn-sm" style="flex:1" data-cancel="${id}">Cancel</button>
+          </div>
+        </form>
+      `;
+      mount.querySelector('[data-cancel]').addEventListener('click', () => { mount.innerHTML = ''; });
+      mount.querySelector('form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const alertMount = document.getElementById('edit-alert-' + id);
+        try {
+          const formData = new FormData(e.target);
+          await api.upload('/api/designs/' + id, formData, 'PUT');
+          loadPortfolio();
+        } catch (err) {
+          alertMount.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+        }
+      });
+    });
+  });
+}
+
+async function init() {
+  const me = await renderNav();
+  if (!me || me.role !== 'tailor') { window.location.href = '/login.html'; return; }
+  currentUser = me;
+  document.getElementById('welcome-heading').textContent = `Welcome, ${me.full_name}`;
+  document.getElementById('welcome-email').textContent = me.email;
+
+  const { profile } = await api.get('/api/me');
+  if (profile) {
+    document.getElementById('specialty').value = profile.specialty || '';
+    document.getElementById('skills').value = profile.skills || '';
+    document.getElementById('bio').value = profile.bio || '';
+    document.getElementById('phone').value = profile.phone || '';
+    document.getElementById('location').value = profile.location || '';
+  }
+
+  loadPortfolio();
+}
+
+document.getElementById('upload-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const alertMount = document.getElementById('upload-alert');
+  alertMount.innerHTML = '';
+  try {
+    const formData = new FormData(e.target);
+    await api.upload('/api/designs', formData);
+    alertMount.innerHTML = `<div class="alert alert-success">Design uploaded.</div>`;
+    e.target.reset();
+    loadPortfolio();
+    document.querySelector('.dash-tab[data-tab="portfolio"]').click();
+  } catch (err) {
+    alertMount.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+  }
+});
+
+document.getElementById('profile-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const alertMount = document.getElementById('profile-alert');
+  const form = new FormData(e.target);
+  try {
+    await api.send('PUT', '/api/profile', {
+      specialty: form.get('specialty'), skills: form.get('skills'), bio: form.get('bio'),
+      phone: form.get('phone'), location: form.get('location'),
+    });
+    alertMount.innerHTML = `<div class="alert alert-success">Profile saved.</div>`;
+  } catch (err) {
+    alertMount.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+  }
+});
+
+init();
+</script>
+</body>
+</html>

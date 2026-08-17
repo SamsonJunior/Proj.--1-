@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Client Dashboard — EDC Tailoring Showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Cormorant+Garamond:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="page">
+  <div id="nav-mount"></div>
+  <main class="main">
+    <div class="container">
+      <div class="dash-head">
+        <div>
+          <span class="eyebrow">Client dashboard</span>
+          <h2 class="mt-0" id="welcome-heading">Welcome</h2>
+          <p class="muted" id="welcome-email" style="margin-top:-8px;font-size:0.9em;"></p>
+        </div>
+        <div class="flex gap-8">
+          <a href="/tailors.html" class="btn btn-outline">Browse tailors</a>
+          <a href="/messages.html" class="btn btn-primary">My messages</a>
+        </div>
+      </div>
+
+      <div class="section-head"><h3 class="mt-0">Recently added designs</h3></div>
+      <div id="design-grid" class="design-grid"></div>
+    </div>
+  </main>
+  <footer class="footer"><div class="container">Web-Based Tailoring Showcase &amp; Client-Linkage System — NSUK EDC</div></footer>
+</div>
+<script src="/js/common.js"></script>
+<script>
+async function init() {
+  const me = await renderNav();
+  if (!me || me.role !== 'client') { window.location.href = '/login.html'; return; }
+  document.getElementById('welcome-heading').textContent = `Welcome, ${me.full_name}`;
+  document.getElementById('welcome-email').textContent = me.email;
+
+  const { designs } = await api.get('/api/designs');
+  const grid = document.getElementById('design-grid');
+  grid.innerHTML = designs.length ? designs.slice(0, 12).map(d => `
+    <a href="/tailor-profile.html?id=${d.tailor_id}" class="design-card" style="text-decoration:none;">
+      <img class="design-card-img" src="${d.image_path}" alt="${escapeHtml(d.title)}">
+      <div class="design-card-body">
+        <h3>${escapeHtml(d.title)}</h3>
+        <div class="design-card-tailor">by ${escapeHtml(d.tailor_name)}</div>
+        <div class="design-card-meta">
+          <span>${escapeHtml(d.category || 'General')}</span>
+          <span>${d.price ? '₦' + escapeHtml(d.price) : ''}</span>
+        </div>
+      </div>
+    </a>
+  `).join('') : `<div class="empty-state" style="grid-column:1/-1"><h3>No designs yet</h3></div>`;
+}
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log In — EDC Tailoring Showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Cormorant+Garamond:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="page">
+  <div id="nav-mount"></div>
+  <main class="main">
+    <div class="container">
+      <div class="form-card">
+        <span class="eyebrow" style="text-align:center">Welcome back</span>
+        <h2 class="text-center">Log in</h2>
+        <div id="alert-mount"></div>
+        <form id="login-form">
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" required autocomplete="email">
+          </div>
+          <div class="field">
+            <label for="password">Password</label>
+            <input id="password" name="password" type="password" required autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn btn-primary btn-block">Log in</button>
+        </form>
+        <div class="form-foot">New here? <a href="/register.html">Create an account</a></div>
+        <div class="form-foot" style="margin-top:6px;"><a href="/forgot-password.html">Forgot your password?</a></div>
+      </div>
+    </div>
+  </main>
+  <footer class="footer"><div class="container">Web-Based Tailoring Showcase &amp; Client-Linkage System — NSUK EDC</div></footer>
+</div>
+<script src="/js/common.js"></script>
+<script>
+renderNav();
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  const alertMount = document.getElementById('alert-mount');
+  alertMount.innerHTML = '';
+  try {
+    const { user } = await api.send('POST', '/api/login', {
+      email: form.get('email'),
+      password: form.get('password'),
+    });
+    window.location.href = user.role === 'tailor' ? '/tailor-dashboard.html' : '/client-dashboard.html';
+  } catch (err) {
+    alertMount.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+  }
+});
+</script>
+</body>
+</html>

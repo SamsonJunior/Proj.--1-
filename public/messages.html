@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Messages — EDC Tailoring Showcase</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Cormorant+Garamond:wght@300;400;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="page">
+  <div id="nav-mount"></div>
+  <main class="main">
+    <div class="container">
+      <span class="eyebrow">Client–tailor interaction</span>
+      <h2 class="mt-0" style="margin-bottom:24px;">Messages</h2>
+
+      <div class="convo-layout">
+        <div class="convo-list" id="convo-list"></div>
+        <div class="convo-thread">
+          <div class="convo-messages" id="convo-messages">
+            <div class="empty-state">Select a conversation to view messages.</div>
+          </div>
+          <form class="convo-compose" id="compose-form" style="display:none;">
+            <input type="text" id="compose-input" placeholder="Type a message..." required>
+            <button type="submit" class="btn btn-primary">Send</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+  <footer class="footer"><div class="container">Web-Based Tailoring Showcase &amp; Client-Linkage System — NSUK EDC</div></footer>
+</div>
+<script src="/js/common.js"></script>
+<script>
+let me = null;
+let activeId = null;
+
+async function loadConvo(id, name) {
+  activeId = id;
+  document.querySelectorAll('.convo-item').forEach(el => el.classList.toggle('active', el.dataset.id == id));
+  const { messages } = await api.get('/api/messages/' + id);
+  const mount = document.getElementById('convo-messages');
+  mount.innerHTML = messages.length ? messages.map(m => {
+    const mine = m.sender_role === me.role;
+    return `
+    <div class="msg-bubble ${mine ? 'msg-mine' : 'msg-theirs'}" data-msg-id="${m.id}">
+      <div class="msg-body">${escapeHtml(m.body)}</div>
+      <div style="font-size:0.7rem;opacity:0.7;margin-top:4px;display:flex;gap:8px;align-items:center;">
+        <span>${timeAgo(m.created_at)}${m.edited_at ? ' (edited)' : ''}</span>
+        ${mine ? `<a href="#" class="msg-edit-link" data-msg-id="${m.id}" style="color:inherit;opacity:0.85;text-decoration:underline;">Edit</a>` : ''}
+      </div>
+    </div>
+  `;
+  }).join('') : `<div class="empty-state">No messages with ${escapeHtml(name)} yet — say hello.</div>`;
+  mount.scrollTop = mount.scrollHeight;
+  document.getElementById('compose-form').style.display = 'flex';
+
+  mount.querySelectorAll('.msg-edit-link').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      startEdit(link.dataset.msgId);
+    });
+  });
+}
+
+function startEdit(msgId) {
+  const bubble = document.querySelector(`.msg-bubble[data-msg-id="${msgId}"]`);
+  if (!bubble || bubble.querySelector('.msg-edit-form')) return;
+  const bodyEl = bubble.querySelector('.msg-body');
+  const currentText = bodyEl.textContent;
+  bubble.innerHTML = `
+    <form class="msg-edit-form" style="display:flex;gap:6px;">
+      <input type="text" class="msg-edit-input" value="${currentText.replace(/"/g, '&quot;')}" style="flex:1;padding:6px 8px;border-radius:4px;border:1px solid rgba(0,0,0,0.2);">
+      <button type="submit" class="btn btn-primary" style="padding:6px 10px;font-size:0.75rem;">Save</button>
+      <button type="button" class="msg-edit-cancel" style="padding:6px 10px;font-size:0.75rem;">Cancel</button>
+    </form>
+  `;
+  const form = bubble.querySelector('.msg-edit-form');
+  const input = bubble.querySelector('.msg-edit-input');
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+
+  bubble.querySelector('.msg-edit-cancel').addEventListener('click', () => {
+    const activeName = document.querySelector('.convo-item.active').textContent;
+    loadConvo(activeId, activeName);
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const newText = input.value.trim();
+    if (!newText) return;
+    await api.send('PUT', '/api/messages/' + msgId, { body: newText });
+    const activeName = document.querySelector('.convo-item.active').textContent;
+    loadConvo(activeId, activeName);
+  });
+}
+
+async function init() {
+  me = await renderNav();
+  if (!me) { window.location.href = '/login.html'; return; }
+
+  const { conversations } = await api.get('/api/conversations');
+  const list = document.getElementById('convo-list');
+  if (conversations.length === 0) {
+    list.innerHTML = `<div class="empty-state">No conversations yet.</div>`;
+  } else {
+    list.innerHTML = conversations.map(c => `<div class="convo-item" data-id="${c.id}">${escapeHtml(c.full_name)}</div>`).join('');
+    list.querySelectorAll('.convo-item').forEach(el => {
+      el.addEventListener('click', () => loadConvo(el.dataset.id, el.textContent));
+    });
+    loadConvo(conversations[0].id, conversations[0].full_name);
+  }
+}
+
+document.getElementById('compose-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('compose-input');
+  if (!activeId || !input.value.trim()) return;
+  const payload = me.role === 'client' ? { tailor_id: activeId, body: input.value } : { client_id: activeId, body: input.value };
+  await api.send('POST', '/api/messages', payload);
+  input.value = '';
+  const activeName = document.querySelector('.convo-item.active').textContent;
+  loadConvo(activeId, activeName);
+});
+
+init();
+</script>
+</body>
+</html>
