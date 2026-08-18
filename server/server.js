@@ -8,6 +8,7 @@ const url = require('node:url');
 
 const db = require('./db');
 const auth = require('./auth');
+const { seedIfEmpty } = require('./seed');
 const { parseUrlEncodedOrJson, parseMultipart, saveUploadedFile } = require('./parseBody');
 
 const PORT = process.env.PORT || 3000;
@@ -64,9 +65,9 @@ function route(method, pattern, handler) {
   routes.push({ method, regex, paramNames, handler });
 }
 
-function getCurrentUser(req) {
+async function getCurrentUser(req) {
   const token = auth.getSessionTokenFromReq(req);
-  return { token, user: auth.getUserBySession(token) };
+  return { token, user: await auth.getUserBySession(token) };
 }
 
 // -- Registration (Chapter 4.1.2: registration module) --
@@ -77,21 +78,21 @@ route('POST', '/api/register', async (req, res) => {
   if (!full_name || !email || !password) return sendJson(res, 400, { error: 'All fields are required' });
   if (password.length < 6) return sendJson(res, 400, { error: 'Password must be at least 6 characters' });
 
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
+  const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(email.toLowerCase());
   if (existing) return sendJson(res, 409, { error: 'An account with this email already exists' });
 
   const { hash, salt } = auth.hashPassword(password);
-  const info = db.prepare(
+  const info = await db.prepare(
     'INSERT INTO users (role, full_name, email, password_hash, password_salt) VALUES (?, ?, ?, ?, ?)'
   ).run(role, full_name, email.toLowerCase(), hash, salt);
 
   if (role === 'tailor') {
-    db.prepare('INSERT INTO tailor_profiles (user_id) VALUES (?)').run(info.lastInsertRowid);
+    await db.prepare('INSERT INTO tailor_profiles (user_id) VALUES (?)').run(info.lastInsertRowid);
   }
 
-  const token = auth.createSession(info.lastInsertRowid);
+  const token = await auth.createSession(info.lastInsertRowid);
   setSessionCookie(res, token);
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
+  const user = await db.prepare('SELECT * FROM users WHERE id = ?').get(info.lastInsertRowid);
   sendJson(res, 201, { user: publicUser(user) });
 });
 
@@ -101,12 +102,12 @@ route('POST', '/api/login', async (req, res) => {
   const { email, password } = body;
   if (!email || !password) return sendJson(res, 400, { error: 'Email and password are required' });
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
+  const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
   if (!user || !auth.verifyPassword(password, user.password_hash, user.password_salt)) {
     return sendJson(res, 401, { error: 'Invalid email or password' });
   }
 
-  const token = auth.createSession(user.id);
+  const token = await auth.createSession(user.id);
   setSessionCookie(res, token);
   sendJson(res, 200, { user: publicUser(user) });
 });
@@ -124,49 +125,49 @@ route('POST', '/api/forgot-password', async (req, res) => {
     return sendJson(res, 400, { error: 'New password must be at least 6 characters' });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
+  const user = await db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase());
   const nameMatches = user && user.full_name.trim().toLowerCase() === full_name.trim().toLowerCase();
   if (!user || !nameMatches) {
     return sendJson(res, 401, { error: 'We could not verify an account with that email and full name' });
   }
 
   const { hash, salt } = auth.hashPassword(new_password);
-  db.prepare('UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?').run(hash, salt, user.id);
+  await db.prepare('UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?').run(hash, salt, user.id);
 
   // Invalidate any existing sessions for this account as a safety measure.
-  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
+  await db.prepare('DELETE FROM sessions WHERE user_id = ?').run(user.id);
 
   sendJson(res, 200, { ok: true });
 });
 
 // -- Logout --
 route('POST', '/api/logout', async (req, res) => {
-  const { token } = getCurrentUser(req);
-  if (token) auth.destroySession(token);
+  const { token } = await getCurrentUser(req);
+  if (token) await auth.destroySession(token);
   clearSessionCookie(res);
   sendJson(res, 200, { ok: true });
 });
 
 // -- Current session --
 route('GET', '/api/me', async (req, res) => {
-  const { user } = getCurrentUser(req);
+  const { user } = await getCurrentUser(req);
   if (!user) return sendJson(res, 200, { user: null });
   let profile = null;
   if (user.role === 'tailor') {
-    profile = db.prepare('SELECT * FROM tailor_profiles WHERE user_id = ?').get(user.id);
+    profile = await db.prepare('SELECT * FROM tailor_profiles WHERE user_id = ?').get(user.id);
   }
   sendJson(res, 200, { user: publicUser(user), profile });
 });
 
 // -- Tailor profile management --
 route('PUT', '/api/profile', async (req, res) => {
-  const { user } = getCurrentUser(req);
+  const { user } = await getCurrentUser(req);
   if (!user) return sendJson(res, 401, { error: 'Not logged in' });
   if (user.role !== 'tailor') return sendJson(res, 403, { error: 'Only tailors have a profile' });
 
   const body = await parseUrlEncodedOrJson(req);
   const { bio = '', specialty = '', skills = '', phone = '', location = '' } = body;
-  db.prepare(
+  await db.prepare(
     'UPDATE tailor_profiles SET bio = ?, specialty = ?, skills = ?, phone = ?, location = ? WHERE user_id = ?'
   ).run(bio, specialty, skills, phone, location, user.id);
   sendJson(res, 200, { ok: true });
@@ -174,7 +175,7 @@ route('PUT', '/api/profile', async (req, res) => {
 
 // -- List all tailors (client browsing module) --
 route('GET', '/api/tailors', async (req, res) => {
-  const tailors = db.prepare(`
+  const tailors = await db.prepare(`
     SELECT users.id, users.full_name, users.email,
            tailor_profiles.bio, tailor_profiles.specialty, tailor_profiles.skills,
            tailor_profiles.phone, tailor_profiles.location
@@ -188,7 +189,7 @@ route('GET', '/api/tailors', async (req, res) => {
 
 // -- Single tailor + their designs --
 route('GET', '/api/tailors/:id', async (req, res, params) => {
-  const tailor = db.prepare(`
+  const tailor = await db.prepare(`
     SELECT users.id, users.full_name, users.email,
            tailor_profiles.bio, tailor_profiles.specialty, tailor_profiles.skills,
            tailor_profiles.phone, tailor_profiles.location
@@ -196,13 +197,13 @@ route('GET', '/api/tailors/:id', async (req, res, params) => {
     WHERE users.id = ? AND users.role = 'tailor'
   `).get(params.id);
   if (!tailor) return sendJson(res, 404, { error: 'Tailor not found' });
-  const designs = db.prepare('SELECT * FROM designs WHERE tailor_id = ? ORDER BY created_at DESC').all(params.id);
+  const designs = await db.prepare('SELECT * FROM designs WHERE tailor_id = ? ORDER BY created_at DESC').all(params.id);
   sendJson(res, 200, { tailor, designs });
 });
 
 // -- Design upload (design upload module) --
 route('POST', '/api/designs', async (req, res) => {
-  const { user } = getCurrentUser(req);
+  const { user } = await getCurrentUser(req);
   if (!user) return sendJson(res, 401, { error: 'Not logged in' });
   if (user.role !== 'tailor') return sendJson(res, 403, { error: 'Only tailors can upload designs' });
 
@@ -213,11 +214,11 @@ route('POST', '/api/designs', async (req, res) => {
   if (!imageFile) return sendJson(res, 400, { error: 'A design image is required' });
 
   const imagePath = saveUploadedFile(imageFile, UPLOADS_DIR);
-  const info = db.prepare(
+  const info = await db.prepare(
     'INSERT INTO designs (tailor_id, title, description, category, price, image_path) VALUES (?, ?, ?, ?, ?, ?)'
   ).run(user.id, title, description, category, price, imagePath);
 
-  const design = db.prepare('SELECT * FROM designs WHERE id = ?').get(info.lastInsertRowid);
+  const design = await db.prepare('SELECT * FROM designs WHERE id = ?').get(info.lastInsertRowid);
   sendJson(res, 201, { design });
 });
 
@@ -234,26 +235,26 @@ route('GET', '/api/designs', async (req, res) => {
   if (category) { query += ' AND designs.category = ?'; args.push(category); }
   if (tailor_id) { query += ' AND designs.tailor_id = ?'; args.push(tailor_id); }
   query += ' ORDER BY designs.created_at DESC';
-  const designs = db.prepare(query).all(...args);
+  const designs = await db.prepare(query).all(...args);
   sendJson(res, 200, { designs });
 });
 
 // -- Delete a design (tailor manages own portfolio) --
 route('DELETE', '/api/designs/:id', async (req, res, params) => {
-  const { user } = getCurrentUser(req);
+  const { user } = await getCurrentUser(req);
   if (!user) return sendJson(res, 401, { error: 'Not logged in' });
-  const design = db.prepare('SELECT * FROM designs WHERE id = ?').get(params.id);
+  const design = await db.prepare('SELECT * FROM designs WHERE id = ?').get(params.id);
   if (!design) return sendJson(res, 404, { error: 'Design not found' });
   if (design.tailor_id !== user.id) return sendJson(res, 403, { error: 'Not your design' });
-  db.prepare('DELETE FROM designs WHERE id = ?').run(params.id);
+  await db.prepare('DELETE FROM designs WHERE id = ?').run(params.id);
   sendJson(res, 200, { ok: true });
 });
 
 // -- Edit an existing design (title/category/price/description, optional new image) --
 route('PUT', '/api/designs/:id', async (req, res, params) => {
-  const { user } = getCurrentUser(req);
+  const { user } = await getCurrentUser(req);
   if (!user) return sendJson(res, 401, { error: 'Not logged in' });
-  const design = db.prepare('SELECT * FROM designs WHERE id = ?').get(params.id);
+  const design = await db.prepare('SELECT * FROM designs WHERE id = ?').get(params.id);
   if (!design) return sendJson(res, 404, { error: 'Design not found' });
   if (design.tailor_id !== user.id) return sendJson(res, 403, { error: 'Not your design' });
 
@@ -264,17 +265,17 @@ route('PUT', '/api/designs/:id', async (req, res, params) => {
   const imageFile = files.find(f => f.fieldName === 'image');
   const imagePath = imageFile ? saveUploadedFile(imageFile, UPLOADS_DIR) : design.image_path;
 
-  db.prepare(
+  await db.prepare(
     'UPDATE designs SET title = ?, description = ?, category = ?, price = ?, image_path = ? WHERE id = ?'
   ).run(title, description, category, price, imagePath, params.id);
 
-  const updated = db.prepare('SELECT * FROM designs WHERE id = ?').get(params.id);
+  const updated = await db.prepare('SELECT * FROM designs WHERE id = ?').get(params.id);
   sendJson(res, 200, { design: updated });
 });
 
 // -- Client–tailor interaction: send a message --
 route('POST', '/api/messages', async (req, res) => {
-  const { user } = getCurrentUser(req);
+  const { user } = await getCurrentUser(req);
   if (!user) return sendJson(res, 401, { error: 'Not logged in' });
 
   const body = await parseUrlEncodedOrJson(req);
@@ -290,21 +291,21 @@ route('POST', '/api/messages', async (req, res) => {
     if (!client_id) return sendJson(res, 400, { error: 'client_id is required' });
   }
 
-  const info = db.prepare(
+  const info = await db.prepare(
     'INSERT INTO messages (client_id, tailor_id, design_id, body, sender_role) VALUES (?, ?, ?, ?, ?)'
   ).run(client_id, tailor_id, design_id || null, text, user.role);
 
-  const message = db.prepare('SELECT * FROM messages WHERE id = ?').get(info.lastInsertRowid);
+  const message = await db.prepare('SELECT * FROM messages WHERE id = ?').get(info.lastInsertRowid);
   sendJson(res, 201, { message });
 });
 
 // -- Edit a message: only the original sender may edit their own message --
 route('PUT', '/api/messages/:id', async (req, res, params) => {
-  const { user } = getCurrentUser(req);
+  const { user } = await getCurrentUser(req);
   if (!user) return sendJson(res, 401, { error: 'Not logged in' });
 
   const msgId = Number(params.id);
-  const existing = db.prepare('SELECT * FROM messages WHERE id = ?').get(msgId);
+  const existing = await db.prepare('SELECT * FROM messages WHERE id = ?').get(msgId);
   if (!existing) return sendJson(res, 404, { error: 'Message not found' });
 
   const isOwner = (existing.sender_role === 'client' && existing.client_id === user.id)
@@ -315,18 +316,18 @@ route('PUT', '/api/messages/:id', async (req, res, params) => {
   const { body: text } = body;
   if (!text || !text.trim()) return sendJson(res, 400, { error: 'Message body is required' });
 
-  db.prepare('UPDATE messages SET body = ?, edited_at = datetime(\'now\') WHERE id = ?').run(text.trim(), msgId);
-  const updated = db.prepare('SELECT * FROM messages WHERE id = ?').get(msgId);
+  await db.prepare('UPDATE messages SET body = ?, edited_at = datetime(\'now\') WHERE id = ?').run(text.trim(), msgId);
+  const updated = await db.prepare('SELECT * FROM messages WHERE id = ?').get(msgId);
   sendJson(res, 200, { message: updated });
 });
 
 // -- Conversation thread between the logged-in user and another party --
 route('GET', '/api/messages/:otherUserId', async (req, res, params) => {
-  const { user } = getCurrentUser(req);
+  const { user } = await getCurrentUser(req);
   if (!user) return sendJson(res, 401, { error: 'Not logged in' });
 
   const otherId = Number(params.otherUserId);
-  const messages = db.prepare(`
+  const messages = await db.prepare(`
     SELECT * FROM messages
     WHERE (client_id = ? AND tailor_id = ?) OR (client_id = ? AND tailor_id = ?)
     ORDER BY created_at ASC
@@ -336,18 +337,18 @@ route('GET', '/api/messages/:otherUserId', async (req, res, params) => {
 
 // -- Inbox: list distinct conversation partners for the logged-in user --
 route('GET', '/api/conversations', async (req, res) => {
-  const { user } = getCurrentUser(req);
+  const { user } = await getCurrentUser(req);
   if (!user) return sendJson(res, 401, { error: 'Not logged in' });
 
   let rows;
   if (user.role === 'client') {
-    rows = db.prepare(`
+    rows = await db.prepare(`
       SELECT DISTINCT users.id, users.full_name
       FROM messages JOIN users ON users.id = messages.tailor_id
       WHERE messages.client_id = ?
     `).all(user.id);
   } else {
-    rows = db.prepare(`
+    rows = await db.prepare(`
       SELECT DISTINCT users.id, users.full_name
       FROM messages JOIN users ON users.id = messages.client_id
       WHERE messages.tailor_id = ?
@@ -381,6 +382,17 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`Tailoring Showcase system running at http://localhost:${PORT}`);
-});
+// The database layer needs to finish creating its tables before the server
+// starts accepting requests, since @libsql/client's setup is asynchronous
+// (unlike the old node:sqlite version, which set everything up instantly).
+db.init()
+  .then(() => seedIfEmpty())
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`Tailoring Showcase system running at http://localhost:${PORT}`);
+    });
+  })
+  .catch(err => {
+    console.error('Failed to initialize database:', err);
+    process.exit(1);
+  });

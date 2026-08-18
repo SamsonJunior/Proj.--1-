@@ -64,7 +64,7 @@ const tailors = [
     phone: '0803 000 0004',
     location: 'Gudi, Nasarawa State',
     design: {
-      title: 'Heritage Dashiki Ensemble', category: 'Heritage', price: '60000', image: 'aliyu.jpg',
+      title: 'Heritage Dashiki Ensemble', category: 'Heritage', price: '60000', image: 'aliyu-photo.jpg',
       description: 'A richly patterned Dashiki ensemble, hand-finished in the traditional style.',
     },
   },
@@ -77,7 +77,7 @@ const tailors = [
     phone: '0803 000 0005',
     location: 'Keffi, Nasarawa State',
     design: {
-      title: 'Ankara Occasion Wear', category: 'Corporate', price: '58000', image: 'amina.jpg',
+      title: 'Ankara Occasion Wear', category: 'Corporate', price: '58000', image: 'amina-photo.jpg',
       description: 'A tailored Ankara occasion outfit for the modern professional woman.',
     },
   },
@@ -90,40 +90,56 @@ const tailors = [
     phone: '0803 000 0006',
     location: 'Lafia, Nasarawa State',
     design: {
-      title: 'Contemporary Print Set', category: 'Traditional', price: '42000', image: 'emeka.jpg',
+      title: 'Contemporary Print Set', category: 'Traditional', price: '42000', image: 'emeka-photo.jpg',
       description: 'A contemporary print ensemble blending Yoruba and Igbo textile traditions.',
     },
   },
 ];
 
-let created = 0;
-let skipped = 0;
+async function seedIfEmpty() {
+  await db.init();
 
-for (const t of tailors) {
-  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(t.email);
-  if (existing) {
-    skipped++;
-    console.log(`skip (already exists): ${t.full_name}`);
-    continue;
+  let created = 0;
+  let skipped = 0;
+
+  for (const t of tailors) {
+    const existing = await db.prepare('SELECT id FROM users WHERE email = ?').get(t.email);
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    const { hash, salt } = hashPassword(SEED_PASSWORD);
+    const info = await db.prepare(
+      'INSERT INTO users (role, full_name, email, password_hash, password_salt) VALUES (?, ?, ?, ?, ?)'
+    ).run('tailor', t.full_name, t.email, hash, salt);
+    const userId = info.lastInsertRowid;
+
+    await db.prepare(
+      'INSERT INTO tailor_profiles (user_id, bio, specialty, skills, phone, location) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(userId, t.bio, t.specialty, t.skills, t.phone, t.location);
+
+    const d = t.design;
+    await db.prepare(
+      'INSERT INTO designs (tailor_id, title, description, category, price, image_path) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(userId, d.title, d.description, d.category, d.price, `/img/tailors/${d.image}`);
+
+    created++;
+    console.log(`created: ${t.full_name} (${t.email}) — password: ${SEED_PASSWORD}`);
   }
 
-  const { hash, salt } = hashPassword(SEED_PASSWORD);
-  const info = db.prepare(
-    'INSERT INTO users (role, full_name, email, password_hash, password_salt) VALUES (?, ?, ?, ?, ?)'
-  ).run('tailor', t.full_name, t.email, hash, salt);
-  const userId = info.lastInsertRowid;
-
-  db.prepare(
-    'INSERT INTO tailor_profiles (user_id, bio, specialty, skills, phone, location) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(userId, t.bio, t.specialty, t.skills, t.phone, t.location);
-
-  const d = t.design;
-  db.prepare(
-    'INSERT INTO designs (tailor_id, title, description, category, price, image_path) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(userId, d.title, d.description, d.category, d.price, `/img/tailors/${d.image}`);
-
-  created++;
-  console.log(`created: ${t.full_name} (${t.email}) — password: ${SEED_PASSWORD}`);
+  if (created || skipped) {
+    console.log(`Seed check: ${created} tailor(s) created, ${skipped} already existed.`);
+  }
+  return { created, skipped };
 }
 
-console.log(`\nDone. ${created} tailor(s) created, ${skipped} skipped (already existed).`);
+module.exports = { seedIfEmpty };
+
+// Allow this file to still be run directly: node server/seed.js
+if (require.main === module) {
+  seedIfEmpty().catch(err => {
+    console.error('Seeding failed:', err);
+    process.exit(1);
+  });
+}

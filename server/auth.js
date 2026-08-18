@@ -16,15 +16,15 @@ function verifyPassword(password, hash, salt) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-function createSession(userId) {
+async function createSession(userId) {
   const token = crypto.randomBytes(32).toString('hex');
-  db.prepare('INSERT INTO sessions (token, user_id) VALUES (?, ?)').run(token, userId);
+  await db.prepare('INSERT INTO sessions (token, user_id) VALUES (?, ?)').run(token, userId);
   return token;
 }
 
-function getUserBySession(token) {
+async function getUserBySession(token) {
   if (!token) return null;
-  const row = db.prepare(
+  const row = await db.prepare(
     `SELECT users.* FROM sessions
      JOIN users ON users.id = sessions.user_id
      WHERE sessions.token = ?`
@@ -32,8 +32,8 @@ function getUserBySession(token) {
   return row || null;
 }
 
-function destroySession(token) {
-  db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
+async function destroySession(token) {
+  await db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
 }
 
 // Parses the "Cookie" header for our session token.
