@@ -3,9 +3,8 @@
    Palette matched to NSUK's official green identity: deep navy
    ink, university green for primary actions, and mint for
    secondary accents on a clean, paper-white ground.
-   Signature element: the "running stitch" — a dashed seam used
-   as a structural device on cards, dividers, and focus states,
-   echoing basting stitches in garment construction.
+   Signature element: a solid accent line at the top of key
+   cards, in the university's green/red thread color.
    ============================================================ */
 
 :root {
@@ -21,14 +20,11 @@
   --line: #d4edda;
   --white: #ffffff;
 
-  --font-display: "Playfair Display", Georgia, "Times New Roman", serif;
-  --font-body: "Cormorant Garamond", -apple-system, BlinkMacSystemFont, "Segoe UI", serif;
-  --font-mono: "Space Mono", "Courier New", monospace;
+  --font-display: "Times New Roman", Times, serif;
+  --font-body: "Times New Roman", Times, serif;
+  --font-mono: "Times New Roman", Times, serif;
 
   --radius: 3px;
-  --stitch: repeating-linear-gradient(
-    to right, var(--ink) 0 6px, transparent 6px 12px
-  );
 }
 
 * { box-sizing: border-box; }
@@ -90,6 +86,14 @@ a:hover { text-decoration: underline; }
 }
 
 /* ---------- Nav ---------- */
+/* #nav-mount is an empty wrapper the nav gets injected into by JS.
+   Without display:contents here, this wrapper's own auto-height box
+   becomes the containing block for the sticky nav below, which gives
+   it almost no room to actually "stick" — so it scrolls away instead
+   of staying pinned. display:contents removes the wrapper from the
+   layout tree so .nav behaves as a direct flex child of .page. */
+#nav-mount { display: contents; }
+
 .nav {
   position: sticky;
   top: 0;
@@ -482,7 +486,7 @@ a:hover { text-decoration: underline; }
   position: absolute;
   top: 0; left: 16px; right: 16px;
   height: 2px;
-  background: var(--stitch);
+  background: var(--thread-red);
 }
 
 /* ---------- Design/portfolio grid ---------- */
@@ -663,7 +667,7 @@ a.tailor-card:hover .tailor-overlay { opacity: 1; }
   align-items: center;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px dashed var(--line);
+  border-top: 1px solid var(--line);
 }
 .tailor-location { font-size: 0.76rem; color: var(--ink-soft); }
 .tailor-contact-btn {
@@ -697,7 +701,7 @@ a.tailor-card:hover .tailor-overlay { opacity: 1; }
 }
 
 .empty-state {
-  border: 1px dashed var(--line);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 44px 24px;
   text-align: center;
@@ -720,7 +724,7 @@ a.tailor-card:hover .tailor-overlay { opacity: 1; }
   position: absolute;
   top: 0; left: 20px; right: 20px;
   height: 2px;
-  background: var(--stitch);
+  background: var(--thread-red);
 }
 .field { margin-bottom: 18px; }
 .field label {

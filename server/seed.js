@@ -1,7 +1,7 @@
-// One-off seed script — populates sample tailor accounts/profiles, plus
+// One-off seed script: populates sample tailor accounts/profiles, plus
 // one real design photo per tailor. Names, specialties, skills, and the
 // design photos themselves are taken directly from the reference
-// mockup's "Meet Our Featured Tailors" section — these are real photos
+// mockup's "Meet Our Featured Tailors" section: these are real photos
 // from your own project brief, not AI-generated placeholders.
 //
 // Log in with any account below (password: password123) and use the
@@ -17,7 +17,7 @@ const SEED_PASSWORD = 'password123';
 
 const tailors = [
   {
-    full_name: 'Fatima Abdullahi',
+    full_name: 'Solomon Adeyemi',
     email: 'fatima.tailor@example.com',
     specialty: 'Senior Artisan',
     skills: 'Aso-Oke, Ankara Fusion, Bridal, Embroidery',
@@ -60,7 +60,7 @@ const tailors = [
     email: 'aliyu.tailor@example.com',
     specialty: 'Heritage Specialist',
     skills: 'Babban Riga, Jalabiya, Hausa Embroidery, Kaftan',
-    bio: 'Master of Northern Nigerian heritage garments — Babban Riga, Jalabiya, and custom embroidered gowns.',
+    bio: 'Master of Northern Nigerian heritage garments: Babban Riga, Jalabiya, and custom embroidered gowns.',
     phone: '0803 000 0004',
     location: 'Gudi, Nasarawa State',
     design: {
@@ -73,7 +73,7 @@ const tailors = [
     email: 'amina.tailor@example.com',
     specialty: "Women's Corporate",
     skills: "Women's Corporate, Ankara Skirt-Suit, Hijab Fashion, Office Wear",
-    bio: "Creates stunning women's professional wear — Ankara skirt-suits and hijab-inclusive designs.",
+    bio: "Creates stunning women's professional wear: Ankara skirt-suits and hijab-inclusive designs.",
     phone: '0803 000 0005',
     location: 'Keffi, Nasarawa State',
     design: {
@@ -125,7 +125,7 @@ async function seedIfEmpty() {
     ).run(userId, d.title, d.description, d.category, d.price, `/img/tailors/${d.image}`);
 
     created++;
-    console.log(`created: ${t.full_name} (${t.email}) — password: ${SEED_PASSWORD}`);
+    console.log(`created: ${t.full_name} (${t.email}): password: ${SEED_PASSWORD}`);
   }
 
   if (created || skipped) {
